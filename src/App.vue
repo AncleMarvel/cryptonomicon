@@ -77,6 +77,7 @@
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div
             v-for="t in tickers"
+            @click="sel = t"
             :key="t.name"
             class="
               bg-white
@@ -97,6 +98,7 @@
             </div>
             <div class="w-full border-t border-gray-200"></div>
             <button
+              @click.stop="sel = null"
               @click="handleDelete(t)"
               class="
                 flex
@@ -132,9 +134,9 @@
         </dl>
         <hr class="w-full border-t border-gray-600 my-4" />
       </template>
-      <section class="relative">
+      <section v-if="sel" class="relative">
         <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
-          VUE - USD
+          {{ sel.name }} - USD
         </h3>
         <div class="flex items-end border-gray-600 border-b border-l h-64">
           <div class="bg-purple-800 border w-10 h-24"></div>
@@ -142,7 +144,11 @@
           <div class="bg-purple-800 border w-10 h-48"></div>
           <div class="bg-purple-800 border w-10 h-16"></div>
         </div>
-        <button type="button" class="absolute top-0 right-0">
+        <button
+          @click.stop="sel = null"
+          type="button"
+          class="absolute top-0 right-0"
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -181,7 +187,8 @@ export default {
         { name: "DEMO2", price: "-" },
         { name: "DEMO3", price: "-" },
         { name: "DEMO4", price: "-" }
-      ]
+      ],
+      sel: null
     };
   },
   methods: {
