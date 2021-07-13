@@ -92,7 +92,7 @@
             "
           >
             <div class="px-4 py-5 sm:p-6 text-center">
-              <dt class="text-sm font-medium text-gray-500 truncate">
+              <dt class="text-sm font-medium text-gray-500 truncate uppercase">
                 {{ t.name }} - USD
               </dt>
               <dd class="mt-1 text-3xl font-semibold text-gray-900">
@@ -138,7 +138,7 @@
         <hr class="w-full border-t border-gray-600 my-4" />
       </template>
       <section v-if="sel" class="relative">
-        <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
+        <h3 class="text-lg leading-6 font-medium text-gray-900 my-8 uppercase">
           {{ sel.name }} - USD
         </h3>
         <div class="flex items-end border-gray-600 border-b border-l h-64">
@@ -185,13 +185,9 @@ export default {
   data() {
     return {
       ticker: "",
-      tickers: [
-        { name: "DEMO1", price: "-" },
-        { name: "DEMO2", price: "-" },
-        { name: "DEMO3", price: "-" },
-        { name: "DEMO4", price: "-" }
-      ],
-      sel: null
+      tickers: [],
+      sel: null,
+      apiKey: "81b05db8496581d7d2a2f7dee21dc20505c4eb8ed23072e1b9f00cb11f68a664"
     };
   },
   methods: {
@@ -206,6 +202,18 @@ export default {
       };
 
       this.tickers.push(newTicker);
+      setInterval(async () => {
+        const f = await fetch(
+          `https://min-api.cryptocompare.com/data/price?fsym=${newTicker.name}&tsyms=USD&api_key=${this.apiKey}`
+        );
+        const data = await f.json();
+        // newTicker.price = data.USD; работает только во вью 2
+        if (this.tickers.find((t) => t.name === newTicker.name)) {
+          this.tickers.find((t) => t.name === newTicker.name).price =
+            data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+        }
+      }, 3000);
+
       this.ticker = "";
     },
 
