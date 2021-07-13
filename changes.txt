@@ -1,1 +1,1 @@
-1. fetch api
+1. ready graph
