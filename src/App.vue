@@ -77,8 +77,11 @@
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div
             v-for="t in tickers"
-            @click="sel = t"
             :key="t.name"
+            @click="sel = t"
+            :class="{
+              'border-4': sel === t
+            }"
             class="
               bg-white
               overflow-hidden

@@ -1,1 +1,1 @@
-1. the ability to choose a ticker (sel) for display graph
+1. sel border
