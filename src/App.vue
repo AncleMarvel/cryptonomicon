@@ -244,6 +244,34 @@ export default {
     select(ticker) {
       this.sel = ticker;
       this.graph = [];
+    },
+
+    getJSONfromApi(method) {
+      return fetch(method)
+        .then((response) => response.json())
+        .catch((error) => {
+          console.log(error);
+        });
+    },
+
+    coinListInit() {
+      this.getJSONfromApi(
+        `https://min-api.cryptocompare.com/data/blockchain/list?api_key=${this.apiKey}`
+      ).then((responseJSON) => {
+        const coinListStr = JSON.stringify(responseJSON.Data);
+        localStorage.setItem("coinList", coinListStr);
+      });
+    },
+
+    getCoinList() {
+      return JSON.parse(localStorage.getItem("coinList"));
+    }
+  },
+  mounted() {
+    if (!this.getCoinList) {
+      this.coinListInit();
+    } else {
+      console.log(this.getCoinList());
     }
   }
 };
