@@ -3,10 +3,10 @@
     <div class="container">
       <div class="w-full my-4"></div>
       <section>
-        <div class="flex">
+        <div class="flex flex-col">
           <div class="max-w-xs">
             <label for="wallet" class="block text-sm font-medium text-gray-700"
-              >Тикер {{ ticker }}</label
+              >Тикер</label
             >
             <div class="mt-1 relative rounded-md shadow-md">
               <input
@@ -28,6 +28,20 @@
                 placeholder="Например DOGE"
               />
             </div>
+          </div>
+          <div class="autocomplete flex max-w-xs justify-around">
+            <div
+              v-for="autoTicker in autoComplete.splice(0, 4)"
+              :key="autoTicker.name"
+              @click="add(autoTicker)"
+            >
+              {{ autoTicker }}
+            </div>
+          </div>
+          <div v-if="hasTickerBeenAdded">
+            <p class="text-center max-w-xs text-red-600">
+              This ticker has been added
+            </p>
           </div>
         </div>
         <button
@@ -191,42 +205,51 @@ export default {
       sel: null,
       apiKey:
         "81b05db8496581d7d2a2f7dee21dc20505c4eb8ed23072e1b9f00cb11f68a664",
-      graph: []
+      graph: [],
+      hasTickerBeenAdded: false
     };
   },
+
   methods: {
-    add() {
-      if (this.ticker === "") {
-        return false;
+    add(t = "") {
+      if (t != "") {
+        const typeOfT = typeof t;
+        if (typeOfT == "string") {
+          this.ticker = t;
+        }
       }
+      this.tickerExistCheck(this.ticker);
+      if (this.ticker === "" || this.hasTickerBeenAdded) {
+        return false;
+      } else {
+        const currentTicker = {
+          name: this.ticker,
+          price: "-"
+        };
+        this.tickers.push(currentTicker);
 
-      const currentTicker = {
-        name: this.ticker,
-        price: "-"
-      };
+        setInterval(async () => {
+          const f = await fetch(
+            `https://min-api.cryptocompare.com/data/price?fsym=${currentTicker.name}&tsyms=USD&api_key=${this.apiKey}`
+          );
+          const data = await f.json();
+          // currentTicker.price = data.USD; работает только во вью 2
+          if (
+            this.tickers.find((t) => t.name === currentTicker.name) &&
+            data.USD
+          ) {
+            this.tickers.find((t) => t.name === currentTicker.name).price =
+              data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+          }
 
-      this.tickers.push(currentTicker);
-      setInterval(async () => {
-        const f = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${currentTicker.name}&tsyms=USD&api_key=${this.apiKey}`
-        );
-        const data = await f.json();
-        // currentTicker.price = data.USD; работает только во вью 2
-        if (
-          this.tickers.find((t) => t.name === currentTicker.name) &&
-          data.USD
-        ) {
-          this.tickers.find((t) => t.name === currentTicker.name).price =
-            data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-        }
+          // может не быть текущего выделенного тикера, и тогда будет ругаться, что name is null
+          if (this.sel?.name === currentTicker.name) {
+            this.graph.push(data.USD);
+          }
+        }, 5000);
 
-        // может не быть текущего выделенного тикера, и тогда будет ругаться, что name is null
-        if (this.sel?.name === currentTicker.name) {
-          this.graph.push(data.USD);
-        }
-      }, 5000);
-
-      this.ticker = "";
+        this.ticker = "";
+      }
     },
 
     handleDelete(tForRemove) {
@@ -265,14 +288,100 @@ export default {
 
     getCoinList() {
       return JSON.parse(localStorage.getItem("coinList"));
+    },
+
+    coinSymbolsInit() {
+      let coinSymbols = [];
+      const coins = this.getCoinList();
+      for (let coin in coins) {
+        coinSymbols.push(coin);
+      }
+      localStorage.setItem("coinSymbols", coinSymbols);
+    },
+
+    getCoinSymbols() {
+      return localStorage.getItem("coinSymbols");
+    },
+
+    coinPartnerSymbolsInit() {
+      const symbols = this.getCoinSymbols().split(",");
+      let partnerSymbols = [];
+      symbols.forEach((s) => {
+        partnerSymbols.push(this.getCoinList()[s].partner_symbol);
+      });
+      localStorage.setItem("coinPartnerSymbols", partnerSymbols);
+    },
+
+    getCoinPartnerSymbols() {
+      return localStorage.getItem("coinPartnerSymbols");
+    },
+
+    getCoin(name) {
+      const result = this.getCoinList()[name];
+      return result;
+    },
+
+    tickerExistCheck(tickerName) {
+      const doesExistT = this.tickers.filter(
+        (t) => t.name.toUpperCase() === tickerName.toUpperCase()
+      );
+      if (doesExistT.length === 1) {
+        this.hasTickerBeenAdded = true;
+      } else {
+        this.hasTickerBeenAdded = false;
+      }
+    },
+
+    clearDuplicatesInArray(array) {
+      const uniqueSet = new Set(array);
+      const result = [...uniqueSet];
+      return result;
     }
   },
-  mounted() {
-    if (!this.getCoinList) {
-      this.coinListInit();
-    } else {
-      console.log(this.getCoinList());
+
+  computed: {
+    autoComplete() {
+      if (this.ticker === "") {
+        return [];
+      }
+      let result = [];
+      let name = this.ticker.toUpperCase();
+      const symbolListStr = this.getCoinSymbols();
+      const symbolList = symbolListStr.split(",");
+      if (symbolListStr.indexOf(name) >= 0) {
+        result = symbolList.filter((s) => !s.indexOf(name));
+        if (result.length >= 4) {
+          result = this.clearDuplicatesInArray(result);
+          return result;
+        }
+      }
+
+      const partnerSymbolStr = this.getCoinPartnerSymbols();
+      const partnerSymbols = partnerSymbolStr.split(",");
+
+      if (partnerSymbolStr.indexOf(name) >= 0) {
+        partnerSymbols
+          .filter((s) => !s.indexOf(name))
+          .forEach((el) => result.push(el));
+      } else {
+        console.log("indexOf(name) returned -1");
+        return [];
+      }
+      result = this.clearDuplicatesInArray(result);
+      return result;
     }
+  },
+
+  watch: {
+    ticker() {
+      this.hasTickerBeenAdded = false;
+    }
+  },
+
+  mounted() {
+    this.coinListInit();
+    this.coinSymbolsInit();
+    this.coinPartnerSymbolsInit();
   }
 };
 </script>
