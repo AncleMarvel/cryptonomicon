@@ -11,10 +11,11 @@
             <div class="mt-1 relative rounded-md shadow-md">
               <input
                 v-model="ticker"
-                @keydown.enter="add"
+                @keydown.enter="add(ticker)"
                 type="text"
                 @input="ticker = $event.target.value.toUpperCase()"
                 name="wallet"
+                autocomplete="off"
                 id="wallet"
                 class="
                   block
@@ -46,7 +47,7 @@
           </div>
         </div>
         <button
-          @click="add"
+          @click="add(ticker)"
           type="button"
           class="
             my-4
@@ -181,7 +182,7 @@
                 {{ t.name }} - USD
               </dt>
               <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                {{ t.price }}
+                {{ formatPrice(t.price) }}
               </dd>
             </div>
             <div class="w-full border-t border-gray-200"></div>
@@ -282,6 +283,14 @@
 // [x] 1. График сломал, если везде одинаковые значения
 // [] 2. paginatedTickers' side effect
 // [x] 3. При удалении тикера, остаётся выбор
+// №18 сделал всё до 1:00:00, всё работает, пошел спать
+
+import {
+  subscribeToTicker,
+  unsubscribeFromTicker,
+  getAvaliableCoinList
+} from "./api";
+
 export default {
   name: "App",
   data() {
@@ -293,9 +302,6 @@ export default {
       graph: [],
       selectedTicker: null,
 
-      apiKey:
-        "81b05db8496581d7d2a2f7dee21dc20505c4eb8ed23072e1b9f00cb11f68a664",
-
       page: 1,
       hasTickerBeenAdded: false
     };
@@ -306,20 +312,30 @@ export default {
       new URL(window.location).searchParams.entries()
     );
 
-    if (windowData.filter) {
-      this.filter = windowData.filter;
-    }
+    const VALID_KEYS = ["filter", "page"];
 
-    if (windowData.page) {
-      console.log(this.paginatedTickers.length);
-      this.page = windowData.page;
-    }
+    VALID_KEYS.forEach((key) => {
+      if (windowData[key]) {
+        this[key] = windowData[key];
+      }
+    });
+
+    // if (windowData.filter) {
+    //   this.filter = windowData.filter;
+    // }
+
+    // if (windowData.page) {
+    //   this.page = windowData.page;
+    // }
 
     const tickersData = localStorage.getItem("cryptonomicon-list");
+
     if (tickersData) {
       this.tickers = JSON.parse(tickersData);
       this.tickers.forEach((ticker) => {
-        this.subscribeToUpdates(ticker.name);
+        subscribeToTicker(ticker.name, (newPrice) =>
+          this.updateTicker(ticker.name, newPrice)
+        );
       });
     }
   },
@@ -398,44 +414,42 @@ export default {
   },
 
   methods: {
-    subscribeToUpdates(tickerName) {
-      setInterval(async () => {
-        const f = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=${this.apiKey}`
-        );
-        const data = await f.json();
-        // currentTicker.price = data.USD; работает только во вью 2
-        if (this.tickers.find((t) => t.name === tickerName) && data.USD) {
-          this.tickers.find((t) => t.name === tickerName).price =
-            data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-        }
+    formatPrice(price) {
+      if (price === "-") {
+        return price;
+      } else {
+        return price > 1 ? price.toFixed(2) : price.toPrecision(2);
+      }
+    },
 
-        // может не быть текущего выделенного тикера, и тогда будет ругаться, что name is null
-        if (this.selectedTicker?.name === tickerName) {
-          this.graph.push(data.USD);
-        }
-      }, 5000);
+    updateTicker(tickerName, price) {
+      this.tickers
+        .filter((t) => t.name === tickerName)
+        .forEach((t) => {
+          t.price = price;
+        });
     },
 
     add(t = "") {
-      if (t != "") {
-        const typeOfT = typeof t;
-        if (typeOfT == "string") {
+      if (this.getCoin(t)) {
+        this.tickerAlrExistCheck(this.getCoin(t));
+        if (this.ticker === "" || this.hasTickerBeenAdded) {
+          return;
+        } else {
           this.ticker = t;
+          const currentTicker = {
+            name: this.ticker,
+            price: "-"
+          };
+          this.tickers = [...this.tickers, currentTicker];
+          this.filter = "";
+          this.ticker = "";
+          subscribeToTicker(currentTicker.name, (newPrice) =>
+            this.updateTicker(currentTicker.name, newPrice)
+          );
         }
-      }
-      this.tickerExistCheck(this.ticker);
-      if (this.ticker === "" || this.hasTickerBeenAdded) {
-        return false;
       } else {
-        const currentTicker = {
-          name: this.ticker,
-          price: "-"
-        };
-        this.tickers = [...this.tickers, currentTicker];
-        this.filter = "";
-        this.subscribeToUpdates(currentTicker.name);
-        this.ticker = "";
+        return;
       }
     },
 
@@ -444,23 +458,16 @@ export default {
       this.graph = [];
     },
 
-    handleDelete(tForRemove) {
-      this.tickers = this.tickers.filter((t) => tForRemove.name != t.name);
-      if (this.selectedTicker === tForRemove) {
+    handleDelete(tickerToRemove) {
+      this.tickers = this.tickers.filter((t) => t !== tickerToRemove);
+      if (this.selectedTicker === tickerToRemove) {
         this.selectedTicker = null;
       }
+      unsubscribeFromTicker(tickerToRemove.name);
     },
 
-    getJSONfromApi(method) {
-      return fetch(method)
-        .then((response) => response.json())
-        .catch((error) => {
-          console.log(error);
-        });
-    },
-
-    coinListInit() {
-      this.getJSONfromApi(
+    async coinListInit() {
+      await getAvaliableCoinList(
         `https://min-api.cryptocompare.com/data/blockchain/list?api_key=${this.apiKey}`
       ).then((responseJSON) => {
         const coinListStr = JSON.stringify(responseJSON.Data);
@@ -489,6 +496,7 @@ export default {
       const symbols = this.getCoinSymbols().split(",");
       let partnerSymbols = [];
       symbols.forEach((s) => {
+        // console.log(this.getCoinList()[s].partner_symbol);
         partnerSymbols.push(this.getCoinList()[s].partner_symbol);
       });
       localStorage.setItem("coinPartnerSymbols", partnerSymbols);
@@ -499,11 +507,23 @@ export default {
     },
 
     getCoin(name) {
-      const result = this.getCoinList()[name];
-      return result;
+      if (this.getCoinList()[name]) {
+        return this.getCoinList()[name].symbol;
+      }
+
+      const partnerSymbols = this.getCoinPartnerSymbols().split(",");
+      const coinPartnerSymbol = partnerSymbols
+        .filter((coin) => coin === name)
+        .toString();
+
+      if (coinPartnerSymbol) {
+        return coinPartnerSymbol;
+      } else {
+        return false;
+      }
     },
 
-    tickerExistCheck(tickerName) {
+    tickerAlrExistCheck(tickerName) {
       const doesExistT = this.tickers.filter((t) => t.name === tickerName);
       if (doesExistT.length === 1) {
         this.hasTickerBeenAdded = true;
@@ -555,6 +575,7 @@ export default {
     this.coinListInit();
     this.coinSymbolsInit();
     this.coinPartnerSymbolsInit();
+    // setInterval(() => this.updateTickers(), 5000);
   }
 };
 </script>
